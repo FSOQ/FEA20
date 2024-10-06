@@ -6,7 +6,7 @@ def triangle_area(p1, p2, p3):
     return 0.5 * abs((p2[0] - p1[0]) * (p3[1] - p1[1]) - (p3[0] - p1[0]) * (p2[1] - p1[1]))
 
 
-def D_matrix(E, nu):
+def D_matrix(E, nu, plane_stress=True):
  # Модель упругости с учетом материала по Моору-Кулону
     if plane_stress:
         # Матрица упругости D для плоского напряжения
@@ -73,19 +73,20 @@ def assemble_global_stiffness_matrix(mesh_points, mesh_elements, E, nu):
     
     for element in mesh_elements:
         nodes = [mesh_points[i] for i in element]
-        K_e = local_stiffness_matrix(*nodes, E, nu)
+        K_e = local_stiffness_matrix(*nodes, E, nu) # *Передача кортежем [array([]),array([]),array([])]
         #K_e_list.append(K_e)
+        #Assembled local stiffness matrix
         
         global_dof_indices = []
+
         for node in element:
             global_dof_indices.append(2 * node)
             global_dof_indices.append(2 * node + 1)
+
         
-#        for i in range(6):
-#            for j in range(6):
-#                K[global_dof_indices[i], global_dof_indices[j]] += K_e[i // 2, j // 2]
-
-
+        #        for i in range(6):
+        #            for j in range(6):
+        #                K[global_dof_indices[i], global_dof_indices[j]] += K_e[i // 2, j // 2]
         for i in range(6):
             for j in range(6):
                 print(f"Global DOF indices: {global_dof_indices[i]}, {global_dof_indices[j]} - Local DOF: {i}, {j}")
