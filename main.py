@@ -1,10 +1,10 @@
 from data.material_import import load_material_properties, get_material_properties
 from src.mesh_generation import create_mesh, load_mesh_from_file
 from src.boundary_conditions import apply_boundary_conditions
-from src.Data_process import assemble_global_stiffness_matrix
+from src.Data_process import assemble_global_stiffness_matrix, compute_strains, compute_stresses
 from src.Pre_process import SW_load
 from src.solver import solve_system
-from utils.plotting import plot_mesh, plot_displacement, display_fem_results
+from utils.plotting import plot_mesh, plot_displacement, display_fem_results, plot_stresses, plot_strains, plot_x_stress_isobars, plot_y_stress_isobars
 #from tests.test_boundary_conditions import check_boundary_conditions
 import numpy as np
 
@@ -45,7 +45,7 @@ if __name__ == "__main__":
     #K_e_list = []
 
     # Сборка глобальной матрицы жесткости
-    K = assemble_global_stiffness_matrix(mesh_points, mesh_elements, E, nu)
+    K, B_matrices, D = assemble_global_stiffness_matrix(mesh_points, mesh_elements, E, nu)
 
     #check_local_stiffness_matrices(K_e_list)
     #check_global_stiffness_matrix(K)
@@ -53,12 +53,27 @@ if __name__ == "__main__":
     # Применение SW
     F = SW_load(mesh_points, mesh_elements, rho, fixed_xy_nodes, g=9.81)
 
-
-
     # Решение системы
     U = solve_system(K, F, fixed_x_nodes, fixed_xy_nodes)
-
-
     # Построение сетки и результатов
 
     plot_displacement(mesh_points, mesh_elements, U)
+    
+    print(f'B shape: {B_matrices.shape}')
+    print(f'D shape: {D.shape}')
+
+    strains = compute_strains(U, B_matrices)
+
+    stresses = compute_stresses(strains, D)
+
+    # Plot strains
+    plot_strains(strains, mesh_points, mesh_elements, title="Strain Visualization", cmap="inferno", show_colorbar=True)
+
+    # Plot stresses
+    plot_stresses(stresses, mesh_points, mesh_elements, title="Stress Visualization", cmap="coolwarm", show_colorbar=True)
+
+    plot_x_stress_isobars(stresses, mesh_points, mesh_elements, title="X-Stress Isobar Visualization", cmap="viridis", levels=10)
+    plot_y_stress_isobars(stresses, mesh_points, mesh_elements, title="Y-Stress Isobar Visualization", cmap="viridis", levels=10)
+    #Sigma = stress_from_strain(B_matrices, D_matrices, U)
+
+    #plot_stress(mesh_points, mesh_elements, Sigma)

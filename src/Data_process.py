@@ -63,40 +63,46 @@ def local_stiffness_matrix(p1, p2, p3, E, nu, plane_stress=True):
     # Добавление параметров модели Моора-Кулона (упрощенно)
     # Например, добавляем жесткость за счет когезии
 
-    return K_e
+    return K_e, B, D
 
 # Сборка глобальной матрицы жесткости
 def assemble_global_stiffness_matrix(mesh_points, mesh_elements, E, nu):
     
     num_nodes = len(mesh_points)
+    num_elements = len(mesh_elements)
+
     K = np.zeros((2 * num_nodes, 2 * num_nodes))
-    
-    for element in mesh_elements:
+        # To store B and D matrices for each element
+    B_matrices = np.zeros((num_elements, 3, 6))  # Assuming each B is 3x6 for 2D elements
+
+
+    for idx, element in enumerate(mesh_elements):
+        # Extract local node coordinates for this element
         nodes = [mesh_points[i] for i in element]
-        K_e = local_stiffness_matrix(*nodes, E, nu) # *Передача кортежем [array([]),array([]),array([])]
-        #K_e_list.append(K_e)
-        #Assembled local stiffness matrix
+        K_e, B, D = local_stiffness_matrix(*nodes, E, nu)  # Local stiffness matrix
+        
+        B_matrices[idx] = B
+
         
         global_dof_indices = []
 
         for node in element:
             global_dof_indices.append(2 * node)
             global_dof_indices.append(2 * node + 1)
-
         
         #        for i in range(6):
         #            for j in range(6):
         #                K[global_dof_indices[i], global_dof_indices[j]] += K_e[i // 2, j // 2]
         for i in range(6):
             for j in range(6):
-                print(f"Global DOF indices: {global_dof_indices[i]}, {global_dof_indices[j]} - Local DOF: {i}, {j}")
+                #print(f"Global DOF indices: {global_dof_indices[i]}, {global_dof_indices[j]} - Local DOF: {i}, {j}")
                 K[global_dof_indices[i], global_dof_indices[j]] += K_e[i, j]
 
     
-    return K
+    return K, B_matrices, D
 
 
-def stress_from_strain(B, D, u):
+def stress_from_strain(B_matrices, D_matrices, U):
     """
     Вычисление напряжений из деформаций с использованием матрицы B и D.
     
@@ -107,6 +113,58 @@ def stress_from_strain(B, D, u):
     Возвращает:
     sigma: вектор напряжений
     """
-    strain = B @ u  # Деформации
-    sigma = D @ strain  # Напряжения
+    strain = B_matrices @ U  # Деформации
+    sigma = D_matrices @ strain  # Напряжения
     return sigma
+
+def compute_strains(U, B_matrices):
+    """
+    Compute the strain vector for each element.
+    
+    Parameters:
+    - U: Displacement vector (shape: (num_dof,))
+    - B_matrices: List of strain-displacement matrices [B] for each element (shape: (3, 2 * num_nodes_per_element))
+
+    Returns:
+    - strains: List of strain vectors for each element (shape: (num_elements, 3))
+    """
+    num_elements = len(B_matrices)
+    strains = []
+
+    # Loop through each element and compute strain
+    for i in range(num_elements):
+        B = B_matrices[i]
+        # Extract displacement values for the nodes corresponding to this element
+        element_dof_indices = np.arange(2 * B.shape[1] // 2)
+        U_element = U[element_dof_indices]
+
+        # Strain calculation: ε = B * U
+        strain = np.dot(B, U_element)
+        strains.append(strain)
+
+    return np.array(strains)
+
+
+def compute_stresses(strains, D):
+    """
+    Compute the stress vector for each element based on the strain vector.
+    
+    Parameters:
+    - strains: List of strain vectors for each element (shape: (num_elements, 3))
+    - D: Constitutive matrix (shape: (3, 3))
+
+    Returns:
+    - stresses: List of stress vectors for each element (shape: (num_elements, 3))
+    """
+    num_elements = strains.shape[0]
+    stresses = []
+
+    # Loop through each element and compute stress
+    for i in range(num_elements):
+        strain = strains[i]
+
+        # Stress calculation: σ = D * ε
+        stress = np.dot(D, strain)
+        stresses.append(stress)
+
+    return np.array(stresses)

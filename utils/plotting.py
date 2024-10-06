@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import matplotlib.tri as tri
 import numpy as np
 import pandas as pd
 
@@ -26,6 +27,167 @@ def plot_displacement(mesh_points, mesh_elements, U):
     plt.gca().set_aspect('equal')
     plt.show()
 
+
+def plot_strains(strains, nodes, elements, title="Strain Plot", cmap="viridis", show_colorbar=True, vmin=None, vmax=None):
+    """
+    Plot element-wise strains on the mesh.
+    
+    Parameters:
+    - strains: Numpy array of strain values for each element (shape: (num_elements, 3))
+    - nodes: Numpy array of node coordinates (shape: (num_nodes, 2))
+    - elements: Numpy array of element connectivity (shape: (num_elements, 3) or (num_elements, 4) for quad)
+    - title: Title of the plot (default: "Strain Plot")
+    - cmap: Colormap for the plot (default: "viridis")
+    - show_colorbar: Whether to show colorbar (default: True)
+    - vmin: Minimum value for colormap scaling (default: None, auto-scale)
+    - vmax: Maximum value for colormap scaling (default: None, auto-scale)
+    """
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    # Triangulate the mesh (works for both triangles and quadrilaterals)
+    triangulation = tri.Triangulation(nodes[:, 0], nodes[:, 1], elements)
+    
+    # Compute the average strain for each element
+    avg_strain = np.mean(strains, axis=1)
+    
+    # Plot the strains
+    tpc = ax.tripcolor(triangulation, avg_strain, shading='flat', cmap=cmap, vmin=vmin, vmax=vmax)
+    
+    # Add optional colorbar
+    if show_colorbar:
+        plt.colorbar(tpc, ax=ax)
+    
+    ax.set_title(title, fontsize=14)
+    ax.set_xlabel("X", fontsize=12)
+    ax.set_ylabel("Y", fontsize=12)
+    ax.set_aspect('equal')
+    
+    plt.show()
+
+
+def plot_stresses(stresses, nodes, elements, title="Stress Plot", cmap="plasma", show_colorbar=True, vmin=None, vmax=None):
+    """
+    Plot element-wise stresses on the mesh.
+    
+    Parameters:
+    - stresses: Numpy array of stress values for each element (shape: (num_elements, 3))
+    - nodes: Numpy array of node coordinates (shape: (num_nodes, 2))
+    - elements: Numpy array of element connectivity (shape: (num_elements, 3) or (num_elements, 4) for quad)
+    - title: Title of the plot (default: "Stress Plot")
+    - cmap: Colormap for the plot (default: "plasma")
+    - show_colorbar: Whether to show colorbar (default: True)
+    - vmin: Minimum value for colormap scaling (default: None, auto-scale)
+    - vmax: Maximum value for colormap scaling (default: None, auto-scale)
+    """
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    # Triangulate the mesh (works for both triangles and quadrilaterals)
+    triangulation = tri.Triangulation(nodes[:, 0], nodes[:, 1], elements)
+    
+    # Compute the average stress for each element
+    avg_stress = np.mean(stresses, axis=1)
+    
+    # Plot the stresses
+    tpc = ax.tripcolor(triangulation, avg_stress, shading='flat', cmap=cmap, vmin=vmin, vmax=vmax)
+    
+    # Add optional colorbar
+    if show_colorbar:
+        plt.colorbar(tpc, ax=ax)
+    
+    ax.set_title(title, fontsize=14)
+    ax.set_xlabel("X", fontsize=12)
+    ax.set_ylabel("Y", fontsize=12)
+    ax.set_aspect('equal')
+    
+    plt.show()
+
+def plot_x_stress_isobars(stresses, nodes, elements, title="Isobar Plot", cmap="coolwarm", levels=None):
+    """
+    Plot isobar lines for stress distribution on the mesh.
+    
+    Parameters:
+    - stresses: Numpy array of stress values for each element (shape: (num_elements, 3))
+    - nodes: Numpy array of node coordinates (shape: (num_nodes, 2))
+    - elements: Numpy array of element connectivity (shape: (num_elements, 3) or (num_elements, 4) for quad)
+    - title: Title of the plot (default: "Isobar Plot")
+    - cmap: Colormap for the plot (default: "coolwarm")
+    - levels: Contour levels for isobars (default: None for automatic scaling)
+    """
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    # Triangulate the mesh (works for both triangles and quadrilaterals)
+    triangulation = tri.Triangulation(nodes[:, 0], nodes[:, 1], elements)
+
+    # Compute the average stress for each node
+    avg_stress = np.zeros(len(nodes))
+    stress_count = np.zeros(len(nodes))
+
+    for i, element in enumerate(elements):
+        for node_index in element:
+            avg_stress[node_index] += stresses[i, 0]  # Taking the first component (σ_x)
+            stress_count[node_index] += 1
+
+    # Avoid division by zero for nodes with no associated stress
+    avg_stress[stress_count > 0] /= stress_count[stress_count > 0]
+
+    # Create a contour plot for isobars
+    contour = ax.tricontourf(triangulation, avg_stress, levels=levels, cmap=cmap)
+    ax.tricontour(triangulation, avg_stress, levels=levels, colors='black', linewidths=0.5)  # Contour lines
+
+    # Add a colorbar
+    cbar = plt.colorbar(contour, ax=ax)
+    cbar.set_label('Stress (σ_x)', fontsize=12)
+
+    ax.set_title(title, fontsize=14)
+    ax.set_xlabel("X", fontsize=12)
+    ax.set_ylabel("Y", fontsize=12)
+    ax.set_aspect('equal')
+
+    plt.show()
+
+def plot_y_stress_isobars(stresses, nodes, elements, title="Y-Stress Isobar Plot", cmap="coolwarm", levels=None):
+    """
+    Plot isobar lines for y-stress distribution on the mesh.
+    
+    Parameters:
+    - stresses: Numpy array of stress values for each element (shape: (num_elements, 3))
+    - nodes: Numpy array of node coordinates (shape: (num_nodes, 2))
+    - elements: Numpy array of element connectivity (shape: (num_elements, 3) or (num_elements, 4) for quad)
+    - title: Title of the plot (default: "Y-Stress Isobar Plot")
+    - cmap: Colormap for the plot (default: "coolwarm")
+    - levels: Contour levels for isobars (default: None for automatic scaling)
+    """
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    # Triangulate the mesh (works for both triangles and quadrilaterals)
+    triangulation = tri.Triangulation(nodes[:, 0], nodes[:, 1], elements)
+
+    # Compute the average y-stress for each node
+    avg_y_stress = np.zeros(len(nodes))
+    stress_count = np.zeros(len(nodes))
+
+    for i, element in enumerate(elements):
+        for node_index in element:
+            avg_y_stress[node_index] += stresses[i, 1]  # Taking the second component (σ_y)
+            stress_count[node_index] += 1
+
+    # Avoid division by zero for nodes with no associated stress
+    avg_y_stress[stress_count > 0] /= stress_count[stress_count > 0]
+
+    # Create a contour plot for y-stress isobars
+    contour = ax.tricontourf(triangulation, avg_y_stress, levels=levels, cmap=cmap)
+    ax.tricontour(triangulation, avg_y_stress, levels=levels, colors='black', linewidths=0.5)  # Contour lines
+
+    # Add a colorbar
+    cbar = plt.colorbar(contour, ax=ax)
+    cbar.set_label('Y-Stress (σ_y)', fontsize=12)
+
+    ax.set_title(title, fontsize=14)
+    ax.set_xlabel("X", fontsize=12)
+    ax.set_ylabel("Y", fontsize=12)
+    ax.set_aspect('equal')
+
+    plt.show()
 
 # Функция для вывода матрицы узлов
 def print_node_matrix(mesh_points):
