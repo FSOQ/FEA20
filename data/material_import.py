@@ -26,4 +26,3 @@ def get_material_properties(materials_df, material_name):
     dilatancy = material['dilatancy_angle']
     return E, nu, rho, c, phi, dilatancy
 
-#Check git

@@ -29,6 +29,12 @@ if __name__ == "__main__":
     mesh_points = np.array(mesh.points)
     mesh_elements = np.array(mesh.elements)
 
+    print(mesh_points)
+    print(mesh_elements)
+    for element in mesh_elements:
+        nodes = [mesh_points[i] for i in element]
+        print(f'Element {element} nodes: {nodes}')
+
     # Применение граничных условий
     fixed_x_nodes, fixed_xy_nodes, free_dof_indices = apply_boundary_conditions(mesh_points)
 
