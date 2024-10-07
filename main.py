@@ -36,7 +36,7 @@ if __name__ == "__main__":
         #print(f'Element {element} nodes: {nodes}')
 
     # Применение граничных условий
-    fixed_x_nodes, fixed_xy_nodes, free_dof_indices = apply_boundary_conditions(mesh_points)
+    fixed_x_nodes, fixed_xy_nodes, free_dof_indices, fixed_dof_indices = apply_boundary_conditions(mesh_points)
     #Вывод матриц
     #display_fem_results(mesh_points, mesh_elements, fixed_x_nodes, fixed_xy_nodes, K_e_list, K)
     plot_mesh(mesh_points, mesh_elements, fixed_x_nodes, fixed_xy_nodes)
@@ -56,6 +56,8 @@ if __name__ == "__main__":
 
     # Решение системы
     U = solve_system(K, F, fixed_x_nodes, fixed_xy_nodes)
+
+
     # Построение сетки и результатов
 
     plot_displacement(mesh_points, mesh_elements, U)

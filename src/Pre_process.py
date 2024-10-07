@@ -19,10 +19,10 @@ def SW_load(mesh_points, mesh_elements, rho, fixed_xy_nodes, g=9.81):
 
 
     num_nodes = len(mesh_points)
-    
+    num_dof = num_nodes * 2
     # Initialize the global load vector
     #Apply for every DOF(NN*2)
-    global_load_vector = np.zeros((num_nodes*2, 2))  # (Fx, Fy) for each node
+    global_load_vector = np.zeros(num_dof,)  # (Fx, Fy) for each node # --- ВАЖНО ---- Стал одномерным массив
 
     # Loop through each element
     for element in mesh_elements:

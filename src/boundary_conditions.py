@@ -17,7 +17,22 @@ def apply_boundary_conditions(mesh_points):
 
     fixed_xy_nodes = [int(i) for i in range(len(y_coords)) if y_coords[i] == 0]
 
-    free_dof_indices = []
+    # Преобразование индексов узлов в индексы степеней свободы
+
+    fixed_dof_indices = []
+
+    for node in fixed_x_nodes:
+        fixed_dof_indices.append(2 * node)  # x DOF
+
+    for node in fixed_xy_nodes:
+        fixed_dof_indices.append(2 * node)      # x DOF
+        fixed_dof_indices.append(2 * node + 1)  # y DOF
+
+    # Степени свободы для свободных узлов
+    total_dof_indices = list(range(2 * len(mesh_points)))
+    free_dof_indices = [i for i in total_dof_indices if i not in fixed_dof_indices]
+
+    """
     for i in range(len(x_coords)):
         if i in fixed_xy_nodes:
             continue
@@ -26,6 +41,7 @@ def apply_boundary_conditions(mesh_points):
         else:
             free_dof_indices.append(2 * i)        # No need to convert here, 2*i will be integer
             free_dof_indices.append(2 * i + 1)    # No need to convert here, 2*i + 1 will be integer
+    """
 
     # Проверка, что все элементы в списках - это целые числа
     assert all(isinstance(x, int) for x in fixed_x_nodes), f"fixed_x_nodes contains non-integer values: {fixed_x_nodes}"
@@ -37,4 +53,4 @@ def apply_boundary_conditions(mesh_points):
     assert len(fixed_xy_nodes) > 0, "fixed_xy_nodes is empty"
     assert len(free_dof_indices) > 0, "free_dof_indices is empty"
 
-    return fixed_x_nodes, fixed_xy_nodes, free_dof_indices
+    return fixed_x_nodes, fixed_xy_nodes, free_dof_indices, fixed_dof_indices

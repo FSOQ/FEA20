@@ -445,3 +445,282 @@ if __name__ == "__main__":
 #
 #
 #
+def create_mesh(points, facets):
+    mesh_info = triangle.MeshInfo()
+    mesh_info.set_points(points)
+    mesh_info.set_facets(facets)
+    mesh = triangle.build(mesh_info, refinement_func=refine)
+    return mesh
+
+mesh = create_mesh(points, facets)
+mesh_points = np.array(mesh.points)
+mesh_elements = np.array(mesh.elements)
+
+def apply_boundary_conditions(mesh_points):
+    x_coords = mesh_points[:, 0]
+    y_coords = mesh_points[:, 1]
+
+    x_min = min(x_coords)
+    x_max = max(x_coords)
+
+
+    # Using int() to ensure we get integer values
+    fixed_x_nodes = [
+        int(i) for i in range(len(x_coords))
+        if (x_coords[i] == x_min or x_coords[i] == x_max) and y_coords[i] != 0
+    ]
+
+    fixed_xy_nodes = [int(i) for i in range(len(y_coords)) if y_coords[i] == 0]
+
+    free_dof_indices = []
+    for i in range(len(x_coords)):
+        if i in fixed_xy_nodes:
+            continue
+        elif i in fixed_x_nodes:
+            free_dof_indices.append(2 * i + 1)  # No need to convert here, 2*i + 1 will be integer
+        else:
+            free_dof_indices.append(2 * i)        # No need to convert here, 2*i will be integer
+            free_dof_indices.append(2 * i + 1)    # No need to convert here, 2*i + 1 will be integer
+
+    # Проверка, что все элементы в списках - это целые числа
+    assert all(isinstance(x, int) for x in fixed_x_nodes), f"fixed_x_nodes contains non-integer values: {fixed_x_nodes}"
+    assert all(isinstance(x, int) for x in fixed_xy_nodes), f"fixed_xy_nodes contains non-integer values: {fixed_xy_nodes}"
+    assert all(isinstance(x, int) for x in free_dof_indices), f"free_dof_indices contains non-integer values: {free_dof_indices}"
+
+    # Дополнительная проверка: списки не должны быть пустыми
+    assert len(fixed_x_nodes) > 0, "fixed_x_nodes is empty"
+    assert len(fixed_xy_nodes) > 0, "fixed_xy_nodes is empty"
+    assert len(free_dof_indices) > 0, "free_dof_indices is empty"
+
+    return fixed_x_nodes, fixed_xy_nodes, free_dof_indices
+
+def local_stiffness_matrix(p1, p2, p3, E, nu, plane_stress=True):
+    
+    # Вычисление площади треугольника
+    A = triangle_area(p1, p2, p3)
+
+    # Проверка на корректность площади
+    if A <= 0.1:
+        raise ValueError(f"Треугольник с площадью {A} вырожден. Точки: {p1}, {p2}, {p3}")
+
+    # Извлечение координат
+    x1, y1 = p1
+    x2, y2 = p2
+    x3, y3 = p3
+
+    # Вычисление коэффициентов для матрицы B
+    b1 = y2 - y3
+    b2 = y3 - y1
+    b3 = y1 - y2
+    c1 = x3 - x2
+    c2 = x1 - x3
+    c3 = x2 - x1
+
+    D = D_matrix(E, nu)
+
+    # Матрица B для элемента
+    B = np.array([
+        [b1, 0, b2, 0, b3, 0],
+        [0, c1, 0, c2, 0, c3],
+        [c1, b1, c2, b2, c3, b3]
+    ]) / (2 * A)
+
+    # Матрица жесткости K_e
+    K_e = A * (B.T @ D @ B)
+
+    # Добавление параметров модели Моора-Кулона (упрощенно)
+    # Например, добавляем жесткость за счет когезии
+
+    return K_e, B, D
+
+# Сборка глобальной матрицы жесткости
+def assemble_global_stiffness_matrix(mesh_points, mesh_elements, E, nu):
+    
+    num_nodes = len(mesh_points)
+    num_elements = len(mesh_elements)
+
+    K = np.zeros((2 * num_nodes, 2 * num_nodes))
+        # To store B and D matrices for each element
+    B_matrices = np.zeros((num_elements, 3, 6))  # Assuming each B is 3x6 for 2D elements
+
+
+    for idx, element in enumerate(mesh_elements):
+        # Extract local node coordinates for this element
+        nodes = [mesh_points[i] for i in element]
+        K_e, B, D = local_stiffness_matrix(*nodes, E, nu)  # Local stiffness matrix
+        
+        B_matrices[idx] = B
+
+        
+        global_dof_indices = []
+
+        for node in element:
+            global_dof_indices.append(2 * node) # x - component
+            global_dof_indices.append(2 * node + 1) # y - component
+        
+        #for i in range(6):
+        #   for j in range(6):
+        #       K[global_dof_indices[i], global_dof_indices[j]] += K_e[i // 2, j // 2]
+        for i in range(6):
+            for j in range(6):
+                #print(f"Global DOF indices: {global_dof_indices[i]}, {global_dof_indices[j]} - Local DOF: {i}, {j}")
+                K[global_dof_indices[i], global_dof_indices[j]] += K_e[i, j]
+
+    
+    return K, B_matrices, D
+
+def SW_load(mesh_points, mesh_elements, rho, fixed_xy_nodes, g=9.81):
+
+
+    num_nodes = len(mesh_points)
+    
+    # Initialize the global load vector
+    #Apply for every DOF(NN*2)
+    global_load_vector = np.zeros((num_nodes*2, 2))  # (Fx, Fy) for each node
+
+    # Loop through each element
+    for element in mesh_elements:
+
+        nodes = [mesh_points[i] for i in element]
+        
+        # Calculate the area of the element (assume triangular element)
+        area = triangle_area(*nodes)
+
+        # Self-weight force per node for this element
+        load_per_node = (rho * g * area) / len(element)
+
+        # Apply the self-weight load to each node in the element
+        for node_index in element:
+            if node_index not in fixed_xy_nodes:
+                # Apply the load only in the y-direction (gravity)
+                global_load_vector[2* node_index, 1] += load_per_node #Add 2 *
+
+    return global_load_vector
+
+def solve_system(K, F, fixed_x_nodes, fixed_xy_nodes):
+    #Getting rows number ([1] for coloumns)
+    num_dof = K.shape[0]
+    
+    # Граничные условия: объединение узлов с фиксированными перемещениями
+    fixed_dof_indices = fixed_x_nodes + fixed_xy_nodes
+    
+    # Степени свободы для свободных узлов
+    free_dof_indices = [i for i in range(num_dof) if i not in fixed_dof_indices]
+    
+    # Уменьшенная система для свободных степеней свободы
+    #The system after elumination
+
+    K_reduced = K[np.ix_(free_dof_indices, free_dof_indices)]
+    
+    # Initialize reduced force vector (1D array, as force components are per DOF)
+    
+    F_reduced = F[free_dof_indices]  # Extract Fx and Fy for free DOFs directly
+    #F_reduced = F  # Extract Fx and Fy for free DOFs directly
+
+    """
+    F_reduced = np.zeros((len(free_dof_indices), 2)) 
+     # Initialize the reduced force vector
+    for i, dof_index in enumerate(free_dof_indices):
+        F_reduced[i, 0] = F[dof_index, 0]  # Fx component
+        F_reduced[i, 1] = F[dof_index, 1]  # Fy component
+    """
+
+    print(f'K-reduced shape: {K_reduced.shape}')
+    print(f'F-reduced shape: {F_reduced.shape}')
+    
+    # Решение для свободных узлов
+    U_free = np.linalg.solve(K_reduced, F_reduced)
+    
+    # Полный вектор перемещений U, включая фиксированные
+    U = np.zeros(num_dof)
+    
+    for i, dof_index in enumerate(free_dof_indices):
+        U[dof_index] = U_free[i, 1]  # Only using the y-component, assuming you want to ignore x    
+
+    """"
+    U[free_dof_indices] = U_free
+
+        # Assign the free displacements to their corresponding DOFs
+
+    for i, dof_index in enumerate(free_dof_indices):
+        if dof_index % 2 == 0:
+            # x-component (even indices)
+            U[dof_index] = U_free[i]  # Assign x-component displacement
+        else:
+            # y-component (odd indices)
+            U[dof_index] = U_free[i]  # Assign y-component displacement
+    """
+    # Присваиваем фиксированным степеням свободы их известные значения (например, ноль)
+    #U[fixed_x_nodes] = 0  # Если узлы зафиксированы по x
+    #U[fixed_xy_nodes] = 0  # Если узлы зафиксированы по x и y
+    
+    for node in fixed_x_nodes:
+        U[2 * node] = 0  # Zero displacement in x-direction for fixed x nodes
+    for node in fixed_xy_nodes:
+        U[2 * node] = 0      # Zero displacement in x-direction for fully fixed nodes
+        U[2 * node + 1] = 0  # Zero displacement in y-direction for fully fixed nodes
+
+    print(f'U shape: {U.shape}')
+    
+
+    return U
+
+def compute_strains(U, B_matrices, mesh_elements):
+    """
+    Compute the strain vector for each element.
+    
+    Parameters:
+    - U: Displacement vector (shape: (num_dof,))
+    - B_matrices: List of strain-displacement matrices [B] for each element (shape: (3, 2 * num_nodes_per_element))
+
+    Returns:
+    - strains: List of strain vectors for each element (shape: (num_elements, 3))
+    """
+    num_elements = len(B_matrices)
+    strains = []
+
+   
+    
+        # Loop through each element and compute strain
+
+
+    for i in range(num_elements):
+        B = B_matrices[i]
+
+        element = mesh_elements[i]  # Access the element for current index
+        element_nodes = len(element)  # Number of nodes in this element
+        #element_nodes = B.shape[1] // 2  # Number of nodes per element
+        element_dof_indices = []
+        # Construct the global DOF indices for the current element
+        for j in range(element_nodes):
+            # Assuming each node has 2 DOFs (x and y)
+            dof_x = 2 * element[j]       # x DOF - add element[]
+            dof_y = 2 * element[j] + 1   # y DOF - add element[]
+            element_dof_indices.append(dof_x)
+            element_dof_indices.append(dof_y)
+
+        # Print the current element and its DOF indices
+        print(f"Element {i}: DOF indices {element_dof_indices}")
+
+
+        U_element = U[element_dof_indices]
+
+        # Strain calculation: ε = B * U
+        strain = np.dot(B, U_element)
+        strains.append(strain)
+
+    return np.array(strains)
+
+K, B_matrices, D = assemble_global_stiffness_matrix(mesh_points, mesh_elements, E, nu)
+
+    #check_local_stiffness_matrices(K_e_list)
+    #check_global_stiffness_matrix(K)
+
+    # Применение SW
+F = SW_load(mesh_points, mesh_elements, rho, fixed_xy_nodes, g=9.81)
+
+
+    # Решение системы
+U = solve_system(K, F, fixed_x_nodes, fixed_xy_nodes)
+
+strains = compute_strains(U, B_matrices, mesh_elements)
