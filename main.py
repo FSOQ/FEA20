@@ -53,6 +53,7 @@ if __name__ == "__main__":
     # Применение SW
     F = SW_load(mesh_points, mesh_elements, rho, fixed_xy_nodes, g=9.81)
 
+
     # Решение системы
     U = solve_system(K, F, fixed_x_nodes, fixed_xy_nodes)
     # Построение сетки и результатов
@@ -62,9 +63,13 @@ if __name__ == "__main__":
     print(f'B shape: {B_matrices.shape}')
     print(f'D shape: {D.shape}')
 
-    strains = compute_strains(U, B_matrices)
+    strains = compute_strains(U, B_matrices, mesh_elements)
 
     stresses = compute_stresses(strains, D)
+    
+    print(f'Strains shape: {strains.shape}')
+    print(f'Stresses shape: {stresses.shape}')
+
 
     # Plot strains
     plot_strains(strains, mesh_points, mesh_elements, title="Strain Visualization", cmap="inferno", show_colorbar=True)

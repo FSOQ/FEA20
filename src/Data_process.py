@@ -87,12 +87,12 @@ def assemble_global_stiffness_matrix(mesh_points, mesh_elements, E, nu):
         global_dof_indices = []
 
         for node in element:
-            global_dof_indices.append(2 * node)
-            global_dof_indices.append(2 * node + 1)
+            global_dof_indices.append(2 * node) # x - component
+            global_dof_indices.append(2 * node + 1) # y - component
         
-        #        for i in range(6):
-        #            for j in range(6):
-        #                K[global_dof_indices[i], global_dof_indices[j]] += K_e[i // 2, j // 2]
+        #for i in range(6):
+        #   for j in range(6):
+        #       K[global_dof_indices[i], global_dof_indices[j]] += K_e[i // 2, j // 2]
         for i in range(6):
             for j in range(6):
                 #print(f"Global DOF indices: {global_dof_indices[i]}, {global_dof_indices[j]} - Local DOF: {i}, {j}")
@@ -117,7 +117,7 @@ def stress_from_strain(B_matrices, D_matrices, U):
     sigma = D_matrices @ strain  # Напряжения
     return sigma
 
-def compute_strains(U, B_matrices):
+def compute_strains(U, B_matrices, mesh_elements):
     """
     Compute the strain vector for each element.
     
@@ -131,11 +131,30 @@ def compute_strains(U, B_matrices):
     num_elements = len(B_matrices)
     strains = []
 
-    # Loop through each element and compute strain
+   
+    
+        # Loop through each element and compute strain
+
+
     for i in range(num_elements):
         B = B_matrices[i]
-        # Extract displacement values for the nodes corresponding to this element
-        element_dof_indices = np.arange(2 * B.shape[1] // 2)
+
+        element = mesh_elements[i]  # Access the element for current index
+        element_nodes = len(element)  # Number of nodes in this element
+        #element_nodes = B.shape[1] // 2  # Number of nodes per element
+        element_dof_indices = []
+        # Construct the global DOF indices for the current element
+        for j in range(element_nodes):
+            # Assuming each node has 2 DOFs (x and y)
+            dof_x = 2 * element[j]       # x DOF - add element[]
+            dof_y = 2 * element[j] + 1   # y DOF - add element[]
+            element_dof_indices.append(dof_x)
+            element_dof_indices.append(dof_y)
+
+        # Print the current element and its DOF indices
+        print(f"Element {i}: DOF indices {element_dof_indices}")
+
+
         U_element = U[element_dof_indices]
 
         # Strain calculation: ε = B * U

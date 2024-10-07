@@ -438,4 +438,10 @@ if __name__ == "__main__":
     # Построение сетки и результатов
 
     plot_displacement(mesh_points, mesh_elements, U_free)
-
+#
+#
+#
+#
+#
+#
+#

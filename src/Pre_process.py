@@ -39,7 +39,7 @@ def SW_load(mesh_points, mesh_elements, rho, fixed_xy_nodes, g=9.81):
         for node_index in element:
             if node_index not in fixed_xy_nodes:
                 # Apply the load only in the y-direction (gravity)
-                global_load_vector[node_index, 1] += load_per_node
+                global_load_vector[2* node_index, 1] += load_per_node #Add 2 *
 
     return global_load_vector
 
