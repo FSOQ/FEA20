@@ -55,7 +55,7 @@ if __name__ == "__main__":
 
 
     # Решение системы
-    U = solve_system(K, F, fixed_x_nodes, fixed_xy_nodes)
+    U = solve_system(K, F, fixed_dof_indices)
 
 
     # Построение сетки и результатов

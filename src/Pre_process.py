@@ -22,24 +22,20 @@ def SW_load(mesh_points, mesh_elements, rho, fixed_xy_nodes, g=9.81):
     num_dof = num_nodes * 2
     # Initialize the global load vector
     #Apply for every DOF(NN*2)
-    global_load_vector = np.zeros(num_dof,)  # (Fx, Fy) for each node # --- ВАЖНО ---- Стал одномерным массив
+    global_load_vector = np.zeros(num_dof)  # (Fx, Fy) for each node # --- ВАЖНО ---- Стал одномерным массив
 
     # Loop through each element
     for element in mesh_elements:
-
         nodes = [mesh_points[i] for i in element]
-        
-        # Calculate the area of the element (assume triangular element)
         area = triangle_area(*nodes)
-
         # Self-weight force per node for this element
         load_per_node = (rho * g * area) / len(element)
-
         # Apply the self-weight load to each node in the element
         for node_index in element:
             if node_index not in fixed_xy_nodes:
                 # Apply the load only in the y-direction (gravity)
-                global_load_vector[2* node_index, 1] += load_per_node #Add 2 *
+                dof_y = 2 * node_index + 1  # Индекс DOF для y-компоненты
+                global_load_vector[dof_y] += load_per_node #Add 2 *
 
     return global_load_vector
 

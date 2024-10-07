@@ -87,8 +87,10 @@ def assemble_global_stiffness_matrix(mesh_points, mesh_elements, E, nu):
         global_dof_indices = []
 
         for node in element:
-            global_dof_indices.append(2 * node) # x - component
-            global_dof_indices.append(2 * node + 1) # y - component
+             global_dof_indices.extend([2 * node, 2 * node + 1])
+        
+        #    global_dof_indices.append(2 * node) # x - component
+        #    global_dof_indices.append(2 * node + 1) # y - component
         
         #for i in range(6):
         #   for j in range(6):
@@ -144,12 +146,14 @@ def compute_strains(U, B_matrices, mesh_elements):
         #element_nodes = B.shape[1] // 2  # Number of nodes per element
         element_dof_indices = []
         # Construct the global DOF indices for the current element
-        for j in range(element_nodes):
+        for node in element:
             # Assuming each node has 2 DOFs (x and y)
-            dof_x = 2 * element[j]       # x DOF - add element[]
-            dof_y = 2 * element[j] + 1   # y DOF - add element[]
-            element_dof_indices.append(dof_x)
-            element_dof_indices.append(dof_y)
+            element_dof_indices.extend([2 * node, 2 * node + 1])
+#        for j in range(element_nodes):       
+        #    dof_x = 2 * element[j]       # x DOF - add element[]
+        #    dof_y = 2 * element[j] + 1   # y DOF - add element[]
+        #    element_dof_indices.append(dof_x)
+        #    element_dof_indices.append(dof_y)
 
         # Print the current element and its DOF indices
         print(f"Element {i}: DOF indices {element_dof_indices}")
