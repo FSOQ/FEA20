@@ -156,7 +156,7 @@ def compute_strains(U, B_matrices, mesh_elements):
         #    element_dof_indices.append(dof_y)
 
         # Print the current element and its DOF indices
-        print(f"Element {i}: DOF indices {element_dof_indices}")
+        #print(f"Element {i}: DOF indices {element_dof_indices}")
 
 
         U_element = U[element_dof_indices]
