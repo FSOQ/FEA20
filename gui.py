@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from utils.plotting import plot_mesh, plot_displacement, plot_strains, plot_stresses, plot_x_stress_isobars, plot_y_stress_isobars
 from utils.data_management import save_data_to_csv, load_data_from_csv
 from src.model_solver import run_fem_solver
+from src.mesh_generation import generate_and_modify_mesh
 
 # Global variable to keep track of the current figure
 current_canvas = None
@@ -13,6 +14,13 @@ current_fig = None
 
 # Global list to hold materials data (for demo purposes)
 materials_data = []
+def on_run_create_mesh():
+    file_path = './data/generated_mesh.csv'
+    generate_and_modify_mesh(file_path)
+
+
+
+
 
 def input_materials():
     # Create the material input window
@@ -131,7 +139,6 @@ def show_existing_materials():
 
 # Main Solver import
 def on_run_solver():
-
     run_fem_solver(materials_data)
 
 # Main GUI
@@ -262,6 +269,9 @@ def create_gui(mesh_points, mesh_elements, fixed_x_nodes, fixed_xy_nodes, U, str
     # Add button to input new materials
     button_input_materials = ttk.Button(button_frame, text="Input New Materials", command=input_materials)
     button_input_materials.pack(pady=5)
+
+    button_mesh_generation = ttk.Button(button_frame, text="Mesh generation", command=on_run_create_mesh)
+    button_mesh_generation.pack(pady=5)
 
         # Add a button to run the FEM solver
     button_run_solver = ttk.Button(button_frame, text="Run FEM Solver", command=on_run_solver)

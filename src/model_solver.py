@@ -1,5 +1,5 @@
 import numpy as np
-from mesh_generation import create_mesh, load_mesh_from_file
+from mesh_generation import create_mesh, load_mesh_from_file, create_layered_mesh, modify_mesh_for_slope
 from boundary_conditions import apply_boundary_conditions
 from Data_process import assemble_global_stiffness_matrix, compute_strains, compute_stresses
 from Pre_process import SW_load
@@ -9,18 +9,7 @@ from tkinter import messagebox
 
 def run_fem_solver():
     try:
-        # Путь к файлу с точками
-        points, facets = load_mesh_from_file('./data/mesh_file.csv')
-        # Путь к файлу с материалами
-        material_csv_path = "./data/material_properties.csv"
-        # Загрузка свойств материала
-        #materials_df = load_material_properties(material_csv_path)
-        # Пример выбора материала по имени
-        #material_name = "Soil_Mat_1"  # Заменить на нужное имя материала
-        #E, nu, c, phi, dilatancy, rho = get_material_properties(materials_df, material_name)
-        # Extract the first material from the materials_data list
         material_name, params = materials_data[0]
-
         # Unpack the material properties from the params dictionary
         E = params["E"]
         nu = params["nu"]
@@ -30,18 +19,15 @@ def run_fem_solver():
         rho = params["rho"]
 
         print(f"Using Material: {material_name} with E={E}, nu={nu}, c={c}, phi={phi} dilatancy={dilatancy}, rho={rho}")
+        # Create the layered mesh based on materials data
+        # Use MeshPy to generate the mesh using these points and facets
+        points, facets = load_mesh_from_file('./data/mesh_file.csv')
 
-        # Создание сетки
-        mesh = create_mesh(points, facets)
-        mesh_points = np.array(mesh.points)
-        mesh_elements = np.array(mesh.elements)
-
+        if points is None or facets is None:
+            raise ValueError("Mesh data could not be loaded.")
         #print(mesh_points)
         #print(mesh_elements)
-        for element in mesh_elements:
-            nodes = [mesh_points[i] for i in element]
             #print(f'Element {element} nodes: {nodes}')
-
         # Применение граничных условий
         fixed_x_nodes, fixed_xy_nodes, free_dof_indices, fixed_dof_indices = apply_boundary_conditions(mesh_points)
         #Вывод матриц
@@ -65,7 +51,6 @@ def run_fem_solver():
         print(f'D shape: {D.shape}')
 
         strains = compute_strains(U, B_matrices, mesh_elements)
-
         stresses = compute_stresses(strains, D)
         
         print(f'Strains shape: {strains.shape}')
