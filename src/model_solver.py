@@ -1,10 +1,11 @@
 import numpy as np
-from mesh_generation import create_mesh, load_mesh_from_file, create_layered_mesh, modify_mesh_for_slope
-from boundary_conditions import apply_boundary_conditions
-from Data_process import assemble_global_stiffness_matrix, compute_strains, compute_stresses
-from Pre_process import SW_load
-from solver import solve_system
 from tkinter import messagebox
+from src.boundary_conditions import apply_boundary_conditions
+from src.mesh_generation import load_mesh_from_file
+from src.Data_process import assemble_global_stiffness_matrix, compute_strains, compute_stresses
+from src.Pre_process import SW_load
+from src.solver import solve_system
+
 #from tests.test_boundary_conditions import check_boundary_conditions
 
 def run_fem_solver():
@@ -22,6 +23,10 @@ def run_fem_solver():
         # Create the layered mesh based on materials data
         # Use MeshPy to generate the mesh using these points and facets
         points, facets = load_mesh_from_file('./data/mesh_file.csv')
+
+        mesh_points = np.array(points)
+        mesh_elements = np.array(facets)
+
 
         if points is None or facets is None:
             raise ValueError("Mesh data could not be loaded.")

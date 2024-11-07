@@ -1,17 +1,44 @@
 import meshpy.triangle as triangle
 import pandas as pd
 import numpy as np
+import math
 
 def save_mesh_to_file(points, facets, file_path):
+    """
+    Saves mesh data (points and facets) to a CSV file.
+    Points will be stored with X, Y coordinates, and facets will be stored with node indices.
+    """
 
-    # Save mesh points and facets to a file to load into the solver later
-    mesh_data = pd.DataFrame({'X': points[:,0], 'Y': points[:,1], 'Node1': [f[0] for f in facets], 'Node2': [f[1] for f in facets]})
-    mesh_data.to_csv(file_path, sep=';', index=False)
+    # Convert meshpy RealArray (points) and IntArray (facets) to numpy arrays
+    points = np.array(points)
+    facets = np.array(facets)
 
-# Define a function to load mesh data from a CSV file
+    # Prepare data to save
+    mesh_data = []
+
+    # Add points to the data
+    for point in points:
+        mesh_data.append(['Point', point[0], point[1], '', '', ''])
+
+    # Add facets to the data
+    for facet in facets:
+        mesh_data.append(['Facet', '', '', facet[0], facet[1], facet[2]])
+
+    # Create DataFrame from the mesh_data list
+    mesh_df = pd.DataFrame(mesh_data, columns=['Type', 'X', 'Y', 'Node1', 'Node2', 'Node3'])
+
+    # Save the mesh data to a CSV file
+    mesh_df.to_csv(file_path, sep=';', index=False)
+    print(f"Mesh data saved to {file_path}")
+
 def load_mesh_from_file(file_path):
-    # Load data from CSV
+    """
+    Loads mesh data (points and facets) from a CSV file.
+    It returns points and facets as numpy arrays.
+    """
+
     try:
+        # Load data from CSV
         mesh_df = pd.read_csv(file_path, delimiter=';')
     except FileNotFoundError:
         print("The specified file was not found.")
@@ -23,20 +50,11 @@ def load_mesh_from_file(file_path):
         print("Error parsing the file.")
         return None, None  # Return None if there is a parsing error
 
+    # Separate points and facets based on 'Type' column
+    points = mesh_df[mesh_df['Type'] == 'Point'][['X', 'Y']].values
+    facets = mesh_df[mesh_df['Type'] == 'Facet'][['Node1', 'Node2', 'Node3']].values
 
-    # Convert 'X' and 'Y' columns into a list of tuples for points
-    points = list(mesh_df[['X', 'Y']].itertuples(index=False, name=None))
-
-    # Only include valid facets where both 'Node1' and 'Node2' are present (drop rows with NaN)
-    valid_facets = mesh_df.dropna(subset=['Node1', 'Node2'])
-
-    # Convert 'Node1' and 'Node2' to a list of tuples for facets, and adjust for 0-based index
-    facets = [(int(row[0]), int(row[1])) for row in valid_facets[['Node1', 'Node2']].values]
-
-    return np.array(points), np.array(facets)
-
-#points = [(0, 10), (10, 10), (15, 5), (30, 5), (30, 0), (0, 0)]
-#facets = [(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (5, 0)]
+    return points, facets
 
 def create_layered_mesh(materials_data, width=30):
     """
@@ -48,6 +66,8 @@ def create_layered_mesh(materials_data, width=30):
     current_height = 0
 
     for i, (material_name, params) in enumerate(materials_data):
+        print(f"Material: {material_name}")
+        print(f"Parameters: {params}")
         height = params["height"]  # Get the height of the current material layer
 
         # Define the four corner points of the rectangle
@@ -152,25 +172,24 @@ def create_mesh(points, facets):
     mesh = triangle.build(mesh_info, refinement_func=refine)
     return mesh
 
-def generate_and_modify_mesh(file_path):
-    # Step 1: Create layered mesh (30xheight for each layer)
-    layer_heights = [10, 15, 20]  # Example heights for different materials
+def generate_and_modify_mesh(file_path, materials_data):
+    # Step 1: Create layered mesh (30xheight for each layer) 
     width = 30  # Width of each layer
-    points, elements = create_layered_mesh(layer_heights, width)
+    points, elements = create_layered_mesh(materials_data, width)
+
     # Step 2: Modify the mesh for the slope
     slope_height = 5  # Example slope height
     slope_angle = 30  # Example slope angle in degrees
     modified_points, modified_elements = modify_mesh_for_slope(points, elements, width, slope_height, slope_angle)
-
+ 
     # Create the mesh (this is decoupled from the solver now)
     mesh = create_mesh(modified_points, modified_elements)
-    
+
     # Save the mesh points and facets to a CSV file
     save_mesh_to_file(mesh.points, mesh.elements, file_path)
 
     print("Mesh generation and modification complete!")
 
-if __name__ == "__main__":
-    generate_and_modify_mesh()
+
 
     
