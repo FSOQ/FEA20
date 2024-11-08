@@ -8,17 +8,41 @@ from utils.data_management import save_data_to_csv, load_data_from_csv
 from src.model_solver import run_fem_solver
 from src.mesh_generation import generate_and_modify_mesh
 
-# Global variable to keep track of the current figure
+# Global variables to store mesh and solver results
+
 current_canvas = None
 current_fig = None
-
-# Global list to hold materials data (for demo purposes)
+mesh_points = None
+mesh_elements = None
+U = None
+strains = None
+stresses = None
 materials_data = []
+material_properties = None  # Global placeholder
+boundary_conditions = None  # Global placeholder
+
+
+def clear_plot():
+    global current_canvas, current_fig
+    if current_canvas:
+        current_canvas.get_tk_widget().destroy()
+        current_canvas = None
+    if current_fig:
+        plt.close(current_fig)
+        current_fig = None
 
 
 def on_run_create_mesh():
+    global mesh_points, mesh_elements
     file_path = './data/generated_mesh.csv'
     generate_and_modify_mesh(file_path, materials_data)
+    mesh_points, mesh_elements = load_mesh_from_file(file_path)
+
+
+def on_run_solver():
+    global U, strains, stresses
+    fixed_x_nodes, fixed_xy_nodes, U, strains, stresses = run_fem_solver(mesh_points, mesh_elements, materials_data)
+
 
 
 def input_materials():
@@ -105,226 +129,208 @@ def input_materials():
     # Start the Tkinter event loop
     window.mainloop()
 
+   
 
-    
-# Function to show all materials and their properties in a table
-def show_existing_materials():
-    # Create a new window to show the table
-    if not materials_data:
-        messagebox.showinfo("No Materials", "No materials data available.")
+
+def save_data_button_callback():
+    if mesh_points is None or materials_data is None:
+        messagebox.showerror("Error", "Cannot save. Mesh or materials not generated!")
         return
+    save_data_to_csv(mesh_points, material_properties, boundary_conditions)
+    messagebox.showinfo("Success", "Data has been saved successfully!")
 
-    table_window = tk.Toplevel()
-    table_window.title("Existing Materials")
-    table_window.geometry("600x400")
 
-    # Create a Treeview widget to display the materials table
-    treeview = ttk.Treeview(table_window, columns=("Material", "E", "nu", "c", "phi", "dilatancy", "rho", "height"), show="headings")
+def load_data_button_callback():
+    global mesh_points, material_properties, boundary_conditions
+    mesh_points, material_properties, boundary_conditions = load_data_from_csv()
+    if mesh_points is not None:
+        messagebox.showinfo("Success", "Data has been loaded successfully!")
+    else:
+        messagebox.showerror("Error", "Failed to load data!")
 
-    # Define the columns for the table
-    treeview.heading("Material", text="Material")
-    treeview.heading("E", text="E")
-    treeview.heading("nu", text="nu")
-    treeview.heading("c", text="c")
-    treeview.heading("phi", text="phi")
-    treeview.heading("dilatancy", text="Dilatancy")
-    treeview.heading("rho", text="rho")
-    treeview.heading("height", text="Height")
 
-    # Set column width
-    treeview.column("Material", width=100)
-    treeview.column("E", width=100)
-    treeview.column("nu", width=100)
-    treeview.column("c", width=100)
-    treeview.column("phi", width=100)
-    treeview.column("dilatancy", width=100)
-    treeview.column("rho", width=100)
-    treeview.column("height", width=100)
+def plot_mesh_callback():
+    if mesh_points is None or mesh_elements is None:
+        messagebox.showerror("Error", "Mesh not generated yet!")
+        return
+    clear_plot()
+    fig, ax = plt.subplots()
+    plot_mesh(mesh_points, mesh_elements)
+    set_plot_to_canvas(fig)
 
-    # Insert existing materials into the table
-    for material_name, params in materials_data:
+
+def plot_displacement_callback():
+    if U is None:
+        messagebox.showerror("Error", "Solver not run yet!")
+        return
+    clear_plot()
+    fig, ax = plt.subplots()
+    plot_displacement(mesh_points, mesh_elements, U)
+    set_plot_to_canvas(fig)
+
+
+def plot_strains_callback():
+    if strains is None:
+        messagebox.showerror("Error", "Solver not run yet!")
+        return
+    clear_plot()
+    fig, ax = plt.subplots()
+    plot_strains(strains, mesh_points, mesh_elements)
+    set_plot_to_canvas(fig)
+
+
+def plot_stresses_callback():
+    if stresses is None:
+        messagebox.showerror("Error", "Solver not run yet!")
+        return
+    clear_plot()
+    fig, ax = plt.subplots()
+    plot_stresses(stresses, mesh_points, mesh_elements)
+    set_plot_to_canvas(fig)
+    current_fig = fig
+
+def clear_plot():
+    global current_canvas, current_fig
+    if current_canvas:
+        current_canvas.get_tk_widget().destroy()
+        current_canvas = None
+    if current_fig:
+        plt.close(current_fig)
+        current_fig = None
+
+
+def create_button(parent, text, command):
+    return ttk.Button(parent, text=text, command=command)
+
+def add_new_material_row():
+    treeview.insert("", "end", values=("", "", "", "", "", "", "", ""))
+
+def create_grid(tree):
+    """Apply styling for grid lines."""
+    # Even and odd row configurations for visible 'grid'
+    tree.tag_configure('evenrow', background='white')
+    tree.tag_configure('oddrow', background='lightblue')
+
+def prevent_edit(event):
+    return "break"  # Prevent the default behavior (editing) for this event
+
+def on_cell_single_click(event):
+    # Your logic to allow editing on single click
+    row_id = treeview.selection()
+    column = treeview.identify_column(event.x)
+    
+    # This function should create an Entry widget and allow editing
+    if row_id and column:
+        edit_cell(treeview, row_id, column, event)
+
+    def save_edit(event):
+        # Save edited value back to Treeview
+        new_value = entry.get()
+        treeview.set(row_id, column, new_value)
+
+        # Update the materials_data list
+        material_name = treeview.set(row_id, "#1")
+        if material_name:  # Avoid adding if material name is blank
+            # If row already exists, update the existing data
+            if len(materials_data) > int(row_id):
+                materials_data[int(row_id)] = {
+                    "Material": material_name,
+                    "E": float(treeview.set(row_id, "#2") or 0),
+                    "nu": float(treeview.set(row_id, "#3") or 0),
+                    "c": float(treeview.set(row_id, "#4") or 0),
+                    "phi": float(treeview.set(row_id, "#5") or 0),
+                    "dilatancy": float(treeview.set(row_id, "#6") or 0),
+                    "rho": float(treeview.set(row_id, "#7") or 0),
+                    "height": float(treeview.set(row_id, "#8") or 0)
+                }
+            else:
+                # Add new material if row does not exist
+                materials_data.append({
+                    "Material": material_name,
+                    "E": float(treeview.set(row_id, "#2") or 0),
+                    "nu": float(treeview.set(row_id, "#3") or 0),
+                    "c": float(treeview.set(row_id, "#4") or 0),
+                    "phi": float(treeview.set(row_id, "#5") or 0),
+                    "dilatancy": float(treeview.set(row_id, "#6") or 0),
+                    "rho": float(treeview.set(row_id, "#7") or 0),
+                    "height": float(treeview.set(row_id, "#8") or 0)
+                })
+
+        entry.destroy()
+
+    entry.bind("<Return>", save_edit)
+    entry.bind("<FocusOut>", lambda e: entry.destroy())
+    entry.focus()
+
+def show_existing_materials():
+    for item in treeview.get_children():
+        treeview.delete(item)
+
+    for material in materials_data:
         treeview.insert("", "end", values=(
-            material_name, params['E'], params['nu'], params['c'], params['phi'], params['dilatancy'], params['rho'], params['height']
+            material["Material"], material['E'], material['nu'], material['c'], material['phi'], material['dilatancy'], material['rho'], material['height']
         ))
-
-    treeview.pack(expand=True, fill="both")
-
-
-# Main Solver import
-def on_run_solver():
-    run_fem_solver(materials_data)
-
-# Define the functions to plot the mesh, displacement, strains, and stresses
-def plot_mesh(mesh_points, mesh_elements, fixed_x_nodes, fixed_xy_nodes):
-    # Example function to plot the mesh (replace with actual plotting logic)
-    for element in mesh_elements:
-        x = mesh_points[element, 0]
-        y = mesh_points[element, 1]
-        plt.fill(x, y, edgecolor='black', fill=False)
-
-def plot_displacement(mesh_points, mesh_elements, U):
-    # Example function to plot the displacement (replace with actual plotting logic)
-    for element in mesh_elements:
-        x = mesh_points[element, 0]
-        y = mesh_points[element, 1]
-        plt.fill(x, y, edgecolor='black', fill=False)
-    # Add displacement arrows for visualization
-    for i, point in enumerate(mesh_points):
-        plt.arrow(point[0], point[1], U[i], U[i], head_width=0.05, color='red')
-
-def plot_strains(strains, mesh_points, mesh_elements, title="Strain Visualization", cmap="inferno", show_colorbar=True):
-    # Example function to plot strains (replace with actual plotting logic)
-    plt.tricontourf(mesh_points[:, 0], mesh_points[:, 1], mesh_elements, strains, cmap=cmap)
-    plt.title(title)
-    if show_colorbar:
-        plt.colorbar()
-
-def plot_stresses(stresses, mesh_points, mesh_elements, title="Stress Visualization", cmap="coolwarm", show_colorbar=True):
-    # Example function to plot stresses (replace with actual plotting logic)
-    plt.tricontourf(mesh_points[:, 0], mesh_points[:, 1], mesh_elements, stresses, cmap=cmap)
-    plt.title(title)
-    if show_colorbar:
-        plt.colorbar()
-
-def plot_x_stress_isobars(stresses, mesh_points, mesh_elements, title="X-Stress Isobar Visualization", cmap="viridis", levels=10):
-    # Example function to plot X-stress isobars (replace with actual plotting logic)
-    plt.contourf(mesh_points[:, 0], mesh_points[:, 1], stresses, levels=levels, cmap=cmap)
-    plt.title(title)
-
-def plot_y_stress_isobars(stresses, mesh_points, mesh_elements, title="Y-Stress Isobar Visualization", cmap="viridis", levels=10):
-    # Example function to plot Y-stress isobars (replace with actual plotting logic)
-    plt.contourf(mesh_points[:, 0], mesh_points[:, 1], stresses, levels=levels, cmap=cmap)
-    plt.title(title)
 
 # Main GUI
 def create_gui():
-    global current_canvas, current_fig
+    global plot_frame, treeview
+
     # Create the main window
     window = tk.Tk()
     window.title("FEM Solver Interface and Plotting")
-    window.geometry("700x600")
+    window.geometry("1200x800")
 
-    # Create a frame for the buttons
+    # Button frame at the top
     button_frame = tk.Frame(window)
-    button_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
+    button_frame.grid(row=0, column=0, columnspan=2, sticky="nsew", padx=5, pady=5)
 
-    # Create a frame for the plot area
+    # Left section: Material table
+    materials_frame = tk.Frame(window)
+    materials_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
+
+    # Right section: Plot frame
     plot_frame = tk.Frame(window)
-    plot_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+    plot_frame.grid(row=1, column=1, sticky="nsew", padx=10, pady=10)
 
-    def save_data_button_callback():
-        save_data_to_csv(mesh_points, material_properties, boundary_conditions)
+    # Configure grid layout to expand properly
+    window.grid_columnconfigure(1, weight=1)
+    window.grid_rowconfigure(1, weight=1)
 
-    def load_data_button_callback():
-        mesh_points, material_properties, boundary_conditions = load_data_from_csv()
-        if mesh_points is not None:
-            # Update the GUI or solver with the loaded data
-            pass
+    # Add the material table on the left
+    treeview = ttk.Treeview(materials_frame, columns=("Material", "E", "nu", "c", "phi", "dilatancy", "rho", "height"), show="headings")
+    
+    # Set up column headers
+    for col in treeview["columns"]:
+        treeview.heading(col, text=col)
+        treeview.column(col, width=100)
 
-    # Function to clear existing plots and close the previous figure
-    def clear_plot():
-        global current_canvas, current_fig
-        if current_canvas:
-            current_canvas.get_tk_widget().destroy()
-            current_canvas = None
-        if current_fig:
-            plt.close(current_fig)  # Close the figure to release memory
-            current_fig = None
+    # Add grid styling and populate data
+    create_grid(treeview)
+    
+    # Bindings
+    #treeview.bind("<Double-1>", prevent_edit)  # Disable double-click editing
+    #treeview.bind("<Return>", prevent_edit)    # Disable Enter key editing
+    treeview.bind("<Button-1>", on_cell_single_click)  # Allow single-click editing
 
-    def plot_mesh_callback():
-        clear_plot()
-        fig, ax = plt.subplots()
-        plot_mesh(mesh_points, mesh_elements, fixed_x_nodes=None, fixed_xy_nodes=None)  # Pass appropriate params
-        current_canvas = FigureCanvasTkAgg(fig, master=plot_frame)
-        current_canvas.draw()
-        current_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        current_fig = fig
+    # Pack the treeview to fit the frame
+    treeview.pack(expand=True, fill="both")
+    
+    # Focus on the first row to enable arrow key navigation
+    if treeview.get_children():
+        treeview.focus(treeview.get_children()[0])
 
-    def plot_displacement_callback():
-        clear_plot()
-        fig, ax = plt.subplots()
-        plot_displacement(mesh_points, mesh_elements, U)
-        current_canvas = FigureCanvasTkAgg(fig, master=plot_frame)
-        current_canvas.draw()
-        current_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        current_fig = fig
+    # Add "Add New Material" button below the materials table
+    add_material_button = create_button(materials_frame, "Add New Material", add_new_material_row)
+    add_material_button.pack(side=tk.BOTTOM, pady=5)
 
-    def plot_strains_callback():
-        clear_plot()
-        fig, ax = plt.subplots()
-        plot_strains(strains, mesh_points, mesh_elements, title="Strain Visualization", cmap="inferno", show_colorbar=True)
-        current_canvas = FigureCanvasTkAgg(fig, master=plot_frame)
-        current_canvas.draw()
-        current_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        current_fig = fig
+    # Add buttons in a single row at the top
+    create_button(button_frame, "Plot Mesh", plot_mesh_callback).grid(row=0, column=0, padx=5)
+    create_button(button_frame, "Plot Displacement", plot_displacement_callback).grid(row=0, column=1, padx=5)
+    create_button(button_frame, "Plot Strains", plot_strains_callback).grid(row=0, column=2, padx=5)
+    create_button(button_frame, "Plot Stresses", plot_stresses_callback).grid(row=0, column=3, padx=5)
+    create_button(button_frame, "Mesh Generation", on_run_create_mesh).grid(row=0, column=4, padx=5)
+    create_button(button_frame, "Run FEM Solver", on_run_solver).grid(row=0, column=5, padx=5)
+    create_button(button_frame, "Save Data", save_data_button_callback).grid(row=0, column=6, padx=5)
+    create_button(button_frame, "Load Data", load_data_button_callback).grid(row=0, column=7, padx=5)
 
-    def plot_stresses_callback():
-        clear_plot()
-        fig, ax = plt.subplots()
-        plot_stresses(stresses, mesh_points, mesh_elements, title="Stress Visualization", cmap="coolwarm", show_colorbar=True)
-        current_canvas = FigureCanvasTkAgg(fig, master=plot_frame)
-        current_canvas.draw()
-        current_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        current_fig = fig
-
-    def plot_x_isobars_callback():
-        clear_plot()
-        fig, ax = plt.subplots()
-        plot_x_stress_isobars(stresses, mesh_points, mesh_elements, title="X-Stress Isobar Visualization", cmap="viridis", levels=10)
-        current_canvas = FigureCanvasTkAgg(fig, master=plot_frame)
-        current_canvas.draw()
-        current_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        current_fig = fig
-
-    def plot_y_isobars_callback():
-        clear_plot()
-        fig, ax = plt.subplots()
-        plot_y_stress_isobars(stresses, mesh_points, mesh_elements, title="Y-Stress Isobar Visualization", cmap="viridis", levels=10)
-        current_canvas = FigureCanvasTkAgg(fig, master=plot_frame)
-        current_canvas.draw()
-        current_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        current_fig = fig
-
-    # Buttons for various actions
-    button_mesh = ttk.Button(button_frame, text="Plot Mesh", command=plot_mesh_callback)
-    button_mesh.pack(pady=5)
-
-    button_displacement = ttk.Button(button_frame, text="Plot Displacement", command=plot_displacement_callback)
-    button_displacement.pack(pady=5)
-
-    button_strains = ttk.Button(button_frame, text="Plot Strains", command=plot_strains_callback)
-    button_strains.pack(pady=5)
-
-    button_stresses = ttk.Button(button_frame, text="Plot Stresses", command=plot_stresses_callback)
-    button_stresses.pack(pady=5)
-
-    button_x_isobars = ttk.Button(button_frame, text="Plot X-Stress Isobars", command=plot_x_isobars_callback)
-    button_x_isobars.pack(pady=5)
-
-    button_y_isobars = ttk.Button(button_frame, text="Plot Y-Stress Isobars", command=plot_y_isobars_callback)
-    button_y_isobars.pack(pady=5)
-
-        # Add buttons for Save and Load
-    button_save = ttk.Button(button_frame, text="Save Data", command=save_data_button_callback)
-    button_save.pack(pady=5)
-
-    button_load = ttk.Button(button_frame, text="Load Data", command=load_data_button_callback)
-    button_load.pack(pady=5)
-
-        # Add button to show existing materials
-    button_show_materials = ttk.Button(button_frame, text="View Existing Materials", command=show_existing_materials)
-    button_show_materials.pack(pady=5)
-
-    # Add button to input new materials
-    button_input_materials = ttk.Button(button_frame, text="Input New Materials", command=input_materials)
-    button_input_materials.pack(pady=5)
-
-    button_mesh_generation = ttk.Button(button_frame, text="Mesh generation", command=on_run_create_mesh)
-    button_mesh_generation.pack(pady=5)
-
-        # Add a button to run the FEM solver
-    button_run_solver = ttk.Button(button_frame, text="Run FEM Solver", command=on_run_solver)
-    button_run_solver.pack(pady=10)
-
-    # Start the Tkinter event loop
     window.mainloop()
